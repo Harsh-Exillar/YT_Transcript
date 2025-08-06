@@ -52,10 +52,11 @@ export default function PricingCard({
         throw new Error(errorData.error || 'Failed to create checkout session')
       }
 
-      const { url } = await response.json()
+      const { sessionId } = await response.json()
 
-      // Open in new tab to avoid iframe restrictions
-      window.open(url, '_blank')
+      // Direct redirect to Stripe Checkout URL instead of using redirectToCheckout
+      const checkoutUrl = `https://checkout.stripe.com/c/pay/${sessionId}`
+      window.location.href = checkoutUrl
 
     } catch (error) {
       console.error('Subscription error:', error)

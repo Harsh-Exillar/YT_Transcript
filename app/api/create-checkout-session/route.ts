@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}&plan=${plan}&user_id=${userId}`,
+      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?success=true&plan=${plan}`,
       cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/?canceled=true`,
       customer_email: userEmail,
       metadata: {
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({ 
+      sessionId: session.id,
       url: session.url 
     })
   } catch (error: any) {
