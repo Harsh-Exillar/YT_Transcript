@@ -261,7 +261,7 @@ export default function LandingPage() {
               <span className="text-lg font-semibold">YouTube Transcript Analyzer</span>
             </div>
             <p className="text-gray-400">
-              © 2024 YouTube Transcript Analyzer. All rights reserved.
+              © 2025 YouTube Transcript Analyzer. All rights reserved.
             </p>
           </div>
         </div>
