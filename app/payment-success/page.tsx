@@ -1,24 +1,32 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, Crown, ArrowRight } from 'lucide-react'
-import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import Link from 'next/link'
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [isProcessing, setIsProcessing] = useState(true)
-  const [paymentData, setPaymentData] = useState<any>(null)
+  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
+  const [message, setMessage] = useState('')
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id')
     const plan = searchParams.get('plan')
-    
-    if (sessionId && plan) {
-      // Process the payment
+    const userId = searchParams.get('user_id')
+
+    if (!sessionId || !plan || !userId) {
+      setStatus('error')
+      setMessage('Missing payment information')
+      return
+    }
+
+    // Process the successful payment
+    try {
+      // Get current user from localStorage
       const currentUser = localStorage.getItem('currentUser')
       if (currentUser) {
         const userData = JSON.parse(currentUser)
@@ -26,8 +34,8 @@ function PaymentSuccessContent() {
         // Update user plan
         userData.plan = plan
         userData.attemptsRemaining = plan === 'pro' ? 100 : plan === 'enterprise' ? 999 : userData.attemptsRemaining
-        userData.subscriptionDate = new Date().toISOString()
         
+        // Save updated user data
         localStorage.setItem('currentUser', JSON.stringify(userData))
         
         // Update users array
@@ -37,111 +45,94 @@ function PaymentSuccessContent() {
           users[userIndex] = userData
           localStorage.setItem('users', JSON.stringify(users))
         }
-        
+
         // Save payment record for admin
         const payments = JSON.parse(localStorage.getItem('payments') || '[]')
-        const paymentRecord = {
-          id: Date.now().toString(),
+        const newPayment = {
+          id: sessionId,
           userId: userData.id,
           username: userData.username,
           plan: plan,
           amount: plan === 'pro' ? 99 : 999,
           currency: 'INR',
-          sessionId: sessionId,
+          status: 'completed',
           date: new Date().toISOString(),
-          status: 'completed'
+          stripeSessionId: sessionId
         }
-        payments.push(paymentRecord)
+        payments.push(newPayment)
         localStorage.setItem('payments', JSON.stringify(payments))
-        
-        setPaymentData({
-          plan: plan,
-          amount: plan === 'pro' ? 99 : 999,
-          username: userData.username
-        })
       }
-    }
-    
-    setIsProcessing(false)
-  }, [searchParams])
 
-  if (isProcessing) {
+      setStatus('success')
+      setMessage(`Successfully upgraded to ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan!`)
+      
+      // Redirect to dashboard after 3 seconds
+      setTimeout(() => {
+        router.push('/dashboard')
+      }, 3000)
+    } catch (error) {
+      setStatus('error')
+      setMessage('Failed to process payment')
+    }
+  }, [searchParams, router])
+
+  if (status === 'loading') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Processing your payment...</p>
-        </div>
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <Loader2 className="w-16 h-16 text-blue-600 animate-spin mb-4" />
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Processing Payment</h2>
+            <p className="text-gray-600 text-center">Please wait while we confirm your payment...</p>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <Card className="shadow-2xl border-0 bg-white/90 backdrop-blur-sm">
-          <CardHeader className="text-center pb-6">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-10 h-10 text-green-600" />
-            </div>
-            <CardTitle className="text-2xl font-bold text-gray-900">Payment Successful!</CardTitle>
-            <CardDescription className="text-lg text-gray-600">
-              Welcome to {paymentData?.plan === 'pro' ? 'Pro' : 'Enterprise'} Plan
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center space-y-6">
-            {paymentData && (
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4">
-                <div className="flex items-center justify-center space-x-2 mb-2">
-                  <Crown className="w-5 h-5 text-purple-600" />
-                  <span className="font-semibold text-purple-800">
-                    {paymentData.plan.charAt(0).toUpperCase() + paymentData.plan.slice(1)} Plan Activated
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600">
-                  Amount: ₹{paymentData.amount} • User: {paymentData.username}
-                </p>
-              </div>
-            )}
-            
-            <div className="space-y-3">
-              <p className="text-gray-700">
-                Your subscription has been activated successfully. You now have access to:
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          {status === 'success' ? (
+            <CheckCircle className="w-16 h-16 text-green-600 mx-auto mb-4" />
+          ) : (
+            <XCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
+          )}
+          <CardTitle className={status === 'success' ? 'text-green-800' : 'text-red-800'}>
+            {status === 'success' ? 'Payment Successful!' : 'Payment Failed'}
+          </CardTitle>
+          <CardDescription>
+            {message}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-center space-y-4">
+          {status === 'success' ? (
+            <>
+              <p className="text-gray-600">
+                You will be redirected to your dashboard in a few seconds...
               </p>
-              <ul className="text-left space-y-2 text-sm text-gray-600">
-                <li className="flex items-center">
-                  <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
-                  {paymentData?.plan === 'pro' ? '100 daily attempts' : 'Unlimited attempts'}
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
-                  AI-powered transcript analysis
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
-                  Advanced chat features
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
-                  Collection management
-                </li>
-              </ul>
+              <div className="space-y-2">
+                <Button asChild className="w-full">
+                  <Link href="/dashboard">Go to Dashboard</Link>
+                </Button>
+                <Button variant="outline" asChild className="w-full">
+                  <Link href="/">Back to Home</Link>
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <Button asChild className="w-full">
+                <Link href="/?section=pricing">Try Again</Link>
+              </Button>
+              <Button variant="outline" asChild className="w-full">
+                <Link href="/">Back to Home</Link>
+              </Button>
             </div>
-            
-            <Button 
-              onClick={() => router.push('/dashboard')}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-            >
-              Go to Dashboard
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-            
-            <Link href="/" className="text-blue-600 hover:text-blue-700 text-sm">
-              Back to Home
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -150,10 +141,13 @@ export default function PaymentSuccessPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <Loader2 className="w-16 h-16 text-blue-600 animate-spin mb-4" />
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Loading</h2>
+            <p className="text-gray-600 text-center">Please wait...</p>
+          </CardContent>
+        </Card>
       </div>
     }>
       <PaymentSuccessContent />
