@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Validate environment variables
-if (!process.env.RAPIDAPI_KEY) {
-  throw new Error('RAPIDAPI_KEY is not set in environment variables')
-}
-
 export async function POST(request: NextRequest) {
   try {
     const { url } = await request.json()
@@ -13,45 +8,64 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'YouTube URL is required' }, { status: 400 })
     }
 
-    // Extract video ID from YouTube URL
-    const videoIdMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)
-    if (!videoIdMatch) {
+    // Validate YouTube URL
+    const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+/
+    if (!youtubeRegex.test(url)) {
       return NextResponse.json({ error: 'Invalid YouTube URL' }, { status: 400 })
     }
 
-    const videoId = videoIdMatch[1]
-
-    const options = {
-      method: 'GET',
-      headers: {
-        'x-rapidapi-key': process.env.RAPIDAPI_KEY,
-        'x-rapidapi-host': 'youtube-transcript3.p.rapidapi.com'
-      }
-    }
-
+    // Encode the URL for the API call
+    const encodedUrl = encodeURIComponent(url)
+    
     const response = await fetch(
-      `https://youtube-transcript3.p.rapidapi.com/youtubetranscript?video_id=${videoId}`,
-      options
+      `https://youtube-2-transcript.p.rapidapi.com/transcript-with-url?url=${encodedUrl}&flat_text=false`,
+      {
+        method: 'GET',
+        headers: {
+          'x-rapidapi-host': 'youtube-2-transcript.p.rapidapi.com',
+          'x-rapidapi-key': 'ffc936450dmshc2e2b7307f68378p186232jsna42db549b51e'
+        }
+      }
     )
 
     if (!response.ok) {
-      throw new Error(`RapidAPI request failed: ${response.status}`)
+      const errorData = await response.text()
+      console.error('RapidAPI Error:', errorData)
+      return NextResponse.json(
+        { error: 'Failed to fetch transcript. Please check if the video has captions available.' },
+        { status: response.status }
+      )
     }
 
     const data = await response.json()
-
+    
+    // Check if transcript data exists
     if (!data || !data.transcript) {
-      throw new Error('No transcript found for this video')
+      return NextResponse.json(
+        { error: 'No transcript found for this video. The video might not have captions.' },
+        { status: 404 }
+      )
     }
 
-    return NextResponse.json({
+    // Extract video title from URL (basic implementation)
+    let title = 'YouTube Video'
+    try {
+      const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)?.[1]
+      if (videoId) {
+        title = `Video ${videoId}`
+      }
+    } catch (e) {
+      // Keep default title
+    }
+
+    return NextResponse.json({ 
       transcript: data.transcript,
-      title: data.title || 'YouTube Video'
+      title: title
     })
-  } catch (error: any) {
-    console.error('Transcript API error:', error)
+  } catch (error) {
+    console.error('Transcript API Error:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch transcript' },
+      { error: 'Internal server error while fetching transcript' },
       { status: 500 }
     )
   }
